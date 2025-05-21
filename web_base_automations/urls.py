@@ -1,0 +1,1 @@
+WEBSITE_URL = 'https://app.konnectd.io/'

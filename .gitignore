@@ -1,0 +1,24 @@
+# Environments 
+.env 
+.venv 
+.env/ 
+env/ 
+venv/ 
+ENV/ 
+env.bak/ 
+venv.bak/ 
+web_base_automations/token.json/
+web_base_automations/token.json
+token.json/
+token.json
+web_base_automations/client_secret.json/
+web_base_automations/client_secret.json/
+client_secret.json
+client_secret.json/
+__pycache__/
+web_base_automations/__pycache__/
+ghl_automation/__pycache__/
+logs/
+logs_detail/*
+logs_detail
+

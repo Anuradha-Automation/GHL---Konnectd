@@ -1,0 +1,136 @@
+function mailMergeLabels() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = sheet.getDataRange().getValues();
+
+    if (data.length < 2) {
+      SpreadsheetApp.getUi().alert("No data found in the new sheet.");
+      return;
+    }
+
+    // Remove duplicate entries based on First Name, Last Name, and Email
+    var seenRecords = new Set();
+    var rowsToDelete = [];
+    var today = new Date();
+    var currentMonth = today.getMonth() + 1; // JavaScript months are 0-based, so add 1
+
+    var birthdayColumnIndex = 4; // Assuming 'Birthday Date' is in the 5th column (index 4)
+
+    for (var i = 1; i < data.length; i++) {
+      var firstName = data[i][0] ? String(data[i][0]).trim() : "";  
+      var lastName = data[i][1] ? String(data[i][1]).trim() : "";   
+      var email = data[i][2] ? String(data[i][2]).trim() : "";      
+      var birthday = data[i][birthdayColumnIndex] ? new Date(data[i][birthdayColumnIndex]) : null;
+
+      var uniqueKey = firstName + "|" + lastName + "|" + email;
+
+      // Condition: Remove if birthday falls in the current month
+      if (birthday && (birthday.getMonth() + 1) === currentMonth) {
+        rowsToDelete.push(i + 1);
+      } else if (seenRecords.has(uniqueKey)) {
+        rowsToDelete.push(i + 1);
+      } else {
+        seenRecords.add(uniqueKey);
+      }
+    }
+
+    // Delete rows from bottom to top
+    for (var j = rowsToDelete.length - 1; j >= 0; j--) {
+      sheet.deleteRow(rowsToDelete[j]);
+    }
+
+    // Fetch updated data after deletion
+    data = sheet.getDataRange().getValues().slice(1); // Exclude headers
+
+    // Create or find the "Birthday_Reports" folder
+    var folderName = "Birthday_Reports";
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+
+    // Check if "Birthday_Labels" file already exists in the folder
+    var existingFiles = folder.getFilesByName("Birthday_Labels");
+    var doc;
+
+    if (existingFiles.hasNext()) {
+      doc = DocumentApp.openById(existingFiles.next().getId());
+      var body = doc.getBody();
+      body.clear();  // Clear existing content
+
+      // Delete existing table if present
+      var tables = body.getTables();
+      for (var i = tables.length - 1; i >= 0; i--) {
+        body.removeChild(tables[i]);
+      }
+    } else {
+      doc = DocumentApp.create("Birthday_Labels"); // Create a new document if none exists
+    }
+
+    var body = doc.getBody();
+    var table = body.appendTable();
+    var columns = 3; // Avery 5160 layout
+    var rowCount = 0;
+
+    // Loop through updated data and create labels
+    for (var i = 0; i < data.length; i++) {
+      var firstName = data[i][0] ? String(data[i][0]).trim() : "";
+      var lastName = data[i][1] ? String(data[i][1]).trim() : "";
+      var address = data[i][5] ? String(data[i][5]).trim() : "";
+      var city = data[i][6] ? String(data[i][6]).trim() : "";
+      var state = data[i][7] ? String(data[i][7]).trim() : "";
+      var zip = data[i][8] ? String(data[i][8]).trim() : "";
+
+      // Skip records where First Name, Last Name, or Address are missing
+      if (!firstName || !lastName || !address || address.toLowerCase().includes("tbd")) {
+        continue;
+      }
+
+      var fullName = firstName + " " + lastName;
+      var fullAddress = address;
+      var cityStateZip = [city, state, zip].filter(Boolean).join(", ");
+
+      if (cityStateZip) {
+        fullAddress += "\n" + cityStateZip;
+      }
+
+      // Skip records where address has trailing commas or empty fields
+      if (!fullAddress || fullAddress.endsWith(",")) {
+        continue;
+      }
+
+      var col = rowCount % columns;
+      
+      if (col === 0) {
+        table.appendTableRow();
+      }
+
+      var cell = table.getRow(Math.floor(rowCount / columns)).appendTableCell();
+      
+      if (fullName) {
+        cell.appendParagraph(fullName).setBold(true);
+      }
+      if (fullAddress.trim()) {
+        cell.appendParagraph(fullAddress);
+      }
+
+      rowCount++;
+    }
+
+    doc.saveAndClose(); // Save the document
+
+    var docId = doc.getId();
+    var file = DriveApp.getFileById(docId);
+
+    // Move the file to the "Birthday_Reports" folder
+    folder.addFile(file);
+    DriveApp.getRootFolder().removeFile(file);
+
+    // Set file permissions to public view & download
+    file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
+
+    var docUrl = doc.getUrl();
+    Logger.log("Labels created/updated: " + docUrl);
+  } catch (error) {
+    // ✅ Notification Disable (No Email or Alerts)
+    Logger.log("Error suppressed: " + error.message);
+  }
+}
